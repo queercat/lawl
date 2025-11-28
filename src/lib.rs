@@ -22,26 +22,18 @@ impl Default for Lawl {
     }
 }
 
-pub struct Environment {
-    pub values: HashMap<String, Box<dyn Serialize>>,
-    pub functions: Vec<String>,
-}
+type Value = Box<dyn Serialize + Sync + Send>;
+type Wrapper<T> = Mutex<T>;
 
-#[cfg(feature = "send")]
-struct Environment {
-    pub values: HashMap<String, Mutex<Box<dyn Serialize + Send>>>,
+pub struct Environment {
+    pub values: HashMap<String, Wrapper<Value>>,
     pub functions: Vec<String>,
 }
 
 impl Default for Environment {
     fn default() -> Self {
-        let values = HashMap::new();
-
-        #[cfg(feature = "send")]
-        let values = Mutex::new(values);
-
         Self {
-            values,
+            values: HashMap::new(),
             functions: vec![
                 "function show(v) if (v or '') == '' then data = '' end end".to_string(),
                 "function hide(v) if (v or '') ~= '' then data = '' end end".to_string(),
@@ -63,15 +55,9 @@ impl Render for String {
         let lua = Lua::new();
 
         for (k, v) in &environment.values {
-            let value = v;
+            let value = v.lock().unwrap();
 
-            #[cfg(feature = "send")]
-            {
-                let value = value.lock().unwrap();
-                let value = value.as_ref();
-            }
-
-            let value = lua.to_value(&value).unwrap();
+            let value = lua.to_value(&value.as_ref()).unwrap();
             env.push((k.to_owned(), value));
         }
 
