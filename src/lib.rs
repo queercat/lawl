@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, fmt::Display, sync::Mutex};
 
 use erased_serde::Serialize;
 use lol_html::{HtmlRewriter, Settings, element, html_content::Element};
@@ -8,9 +8,28 @@ pub struct Lawl {
     environment: Environment,
 }
 
+type Value = Box<dyn Serialize + Sync + Send>;
+type Wrapper<T> = Mutex<T>;
+
 impl Lawl {
-    pub fn render(&self, html: &String) -> Result<String, ()> {
-        html.render(&self.environment)
+    pub fn render(&self, html: &impl Display) -> Result<String, ()> {
+        html.to_string().render(&self.environment)
+    }
+
+    pub fn insert<T: Serialize + Sync + Send + 'static>(
+        &mut self,
+        key: &impl Display,
+        value: T,
+    ) -> Result<(), ()> {
+        self.environment
+            .values
+            .insert(key.to_string(), Mutex::new(Box::new(value)));
+        Ok(())
+    }
+
+    pub fn remove(&mut self, key: &impl Display) -> Result<(), ()> {
+        self.environment.values.remove(&key.to_string());
+        Ok(())
     }
 }
 
@@ -21,9 +40,6 @@ impl Default for Lawl {
         }
     }
 }
-
-type Value = Box<dyn Serialize + Sync + Send>;
-type Wrapper<T> = Mutex<T>;
 
 pub struct Environment {
     pub values: HashMap<String, Wrapper<Value>>,
